@@ -138,17 +138,28 @@ async function createEvent(
   calendarName?: string,
   location?: string,
   description?: string,
-  isAllDay?: boolean
+  isAllDay?: boolean,
+  alarms?: number[]
 ): Promise<string> {
   const targetCalendar = calendarName || "Kalender";
   const locationProp = location ? `, location:"${escapeForAppleScript(location)}"` : "";
   const descProp = description ? `, description:"${escapeForAppleScript(description)}"` : "";
   const allDayProp = isAllDay ? ", allday event:true" : "";
 
+  // Build alarm creation commands if alarms are specified
+  let alarmCommands = "";
+  if (alarms && alarms.length > 0) {
+    const alarmStatements = alarms.map(minutes =>
+      `make new display alarm at end of display alarms of newEvent with properties {trigger interval:${minutes}}`
+    ).join("\n        ");
+    alarmCommands = `
+        ${alarmStatements}`;
+  }
+
   const script = `
     tell application "Calendar"
       tell calendar "${escapeForAppleScript(targetCalendar)}"
-        make new event with properties {summary:"${escapeForAppleScript(title)}", start date:date "${formatDateForAppleScript(startDate)}", end date:date "${formatDateForAppleScript(endDate)}"${allDayProp}${locationProp}${descProp}}
+        set newEvent to make new event with properties {summary:"${escapeForAppleScript(title)}", start date:date "${formatDateForAppleScript(startDate)}", end date:date "${formatDateForAppleScript(endDate)}"${allDayProp}${locationProp}${descProp}}${alarmCommands}
         return "created"
       end tell
     end tell
@@ -312,6 +323,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "Optional: Event description",
             },
+            alarms: {
+              type: "array",
+              items: {
+                type: "number",
+              },
+              description:
+                "Optional: Array of alarm times in minutes before the event. Negative values for before event (e.g., -15 for 15 minutes before, -60 for 1 hour before). Use -1440 for 1 day before.",
+            },
           },
           required: ["title", "startDate", "endDate"],
         },
@@ -414,7 +433,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "create_event": {
-        const { title, startDate, endDate, calendarName, location, description, isAllDay } =
+        const { title, startDate, endDate, calendarName, location, description, isAllDay, alarms } =
           args as {
             title: string;
             startDate: string;
@@ -423,6 +442,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             location?: string;
             description?: string;
             isAllDay?: boolean;
+            alarms?: number[];
           };
 
         const eventId = await createEvent(
@@ -432,7 +452,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           calendarName,
           location,
           description,
-          isAllDay
+          isAllDay,
+          alarms
         );
         return {
           content: [
