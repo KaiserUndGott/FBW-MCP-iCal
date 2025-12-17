@@ -29,18 +29,37 @@ interface EventInfo {
   isAllDay: boolean;
 }
 
-async function runAppleScript(script: string): Promise<string> {
-  // Ensure Calendar app is running
-  const launchScript = `
-    tell application "Calendar"
-      launch
-    end tell
-    delay 0.5
-    ${script}
-  `;
+// Track if Calendar app has been launched this session
+let calendarAppLaunched = false;
+
+async function ensureCalendarAppRunning(): Promise<void> {
+  if (calendarAppLaunched) return;
 
   try {
-    const { stdout } = await execFileAsync("osascript", ["-e", launchScript], {
+    // Launch Calendar app without blocking
+    await execFileAsync("osascript", ["-e", `
+      tell application "Calendar"
+        launch
+      end tell
+    `], { timeout: 10000 });
+    calendarAppLaunched = true;
+    // Small delay to let the app initialize
+    await new Promise(resolve => setTimeout(resolve, 500));
+  } catch (error) {
+    console.error("Warning: Could not launch Calendar app:", error);
+  }
+}
+
+async function runAppleScript(script: string): Promise<string> {
+  // Ensure Calendar app is running (only on first call)
+  await ensureCalendarAppRunning();
+
+  try {
+    const { stdout } = await execFileAsync("osascript", ["-e", `
+    tell application "Calendar"
+      ${script}
+    end tell
+    `], {
       timeout: 30000,
     });
     return stdout.trim();
@@ -55,11 +74,9 @@ async function runAppleScript(script: string): Promise<string> {
 
 async function listCalendars(): Promise<CalendarInfo[]> {
   const script = `
-    tell application "Calendar"
       set calNames to name of calendars
       set AppleScript's text item delimiters to "~~~"
       return calNames as text
-    end tell
   `;
 
   const result = await runAppleScript(script);
@@ -80,7 +97,6 @@ async function listEvents(
     : `set cals to calendars`;
 
   const script = `
-    tell application "Calendar"
       set startD to date "${formatDateForAppleScript(startDate)}"
       set endD to date "${formatDateForAppleScript(endDate)}"
       set eventList to {}
@@ -110,7 +126,6 @@ async function listEvents(
 
       set AppleScript's text item delimiters to "~~~"
       return eventList as text
-    end tell
   `;
 
   const result = await runAppleScript(script);
@@ -157,12 +172,10 @@ async function createEvent(
   }
 
   const script = `
-    tell application "Calendar"
       tell calendar "${escapeForAppleScript(targetCalendar)}"
         set newEvent to make new event with properties {summary:"${escapeForAppleScript(title)}", start date:date "${formatDateForAppleScript(startDate)}", end date:date "${formatDateForAppleScript(endDate)}"${allDayProp}${locationProp}${descProp}}${alarmCommands}
         return "created"
       end tell
-    end tell
   `;
 
   await runAppleScript(script);
@@ -189,13 +202,11 @@ async function updateEvent(
   if (setProperties.length === 0) return;
 
   const script = `
-    tell application "Calendar"
       tell calendar "${escapeForAppleScript(calendarName)}"
         set targetEvent to (first event whose summary is "${escapeForAppleScript(eventSummary)}")
         ${setProperties.join("\n        ")}
         return "success"
       end tell
-    end tell
   `;
 
   await runAppleScript(script);
@@ -203,13 +214,11 @@ async function updateEvent(
 
 async function deleteEvent(eventSummary: string, calendarName: string): Promise<void> {
   const script = `
-    tell application "Calendar"
       tell calendar "${escapeForAppleScript(calendarName)}"
         set targetEvent to (first event whose summary is "${escapeForAppleScript(eventSummary)}")
         delete targetEvent
         return "success"
       end tell
-    end tell
   `;
 
   await runAppleScript(script);
