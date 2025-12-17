@@ -83,6 +83,7 @@ Erstellt einen neuen Termin.
 - `isAllDay` (optional): Ganztägiger Termin
 - `location` (optional): Ort
 - `description` (optional): Beschreibung
+- `alarms` (optional): Array von Erinnerungen in Minuten vor dem Termin (z.B. `[-15, -60]` für 15 Min. und 1 Stunde vorher)
 
 **Beispiel:**
 ```json
@@ -92,7 +93,8 @@ Erstellt einen neuen Termin.
   "endDate": "2024-01-15T11:00:00",
   "calendarName": "Arbeit",
   "location": "Konferenzraum A",
-  "description": "Quartalsplanung besprechen"
+  "description": "Quartalsplanung besprechen",
+  "alarms": [-15, -1440]
 }
 ```
 
@@ -125,10 +127,13 @@ Der MCP Server verwendet AppleScript, um über die macOS Kalender-App auf die Ka
 Gehe zu **Systemeinstellungen > Datenschutz & Sicherheit > Automation** und erlaube Claude den Zugriff auf die Kalender-App.
 
 ### Kalender-App öffnet sich
-Das ist normal - der Server startet die Kalender-App im Hintergrund, um auf die Daten zuzugreifen.
+Das ist normal - der Server startet die Kalender-App im Hintergrund beim ersten Tool-Aufruf, um auf die Daten zuzugreifen.
 
 ### Keine iCloud Kalender sichtbar
 Stelle sicher, dass iCloud Kalender in den Systemeinstellungen aktiviert ist und in der Kalender-App angezeigt wird.
+
+### MCP Server Timeout bei Initialisierung
+Falls der Server nicht startet, prüfe die Logs unter `~/Library/Logs/Claude/mcp-server-icloud-calendar.log`. Der Server sollte sofort auf die `initialize`-Anfrage antworten. Die Kalender-App wird erst beim ersten Tool-Aufruf gestartet, nicht bei der Initialisierung.
 
 ## Lizenz
 
